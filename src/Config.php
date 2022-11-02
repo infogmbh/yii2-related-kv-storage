@@ -154,20 +154,45 @@ class Config extends BaseObject implements \ArrayAccess, \Countable, \Iterator
     public function save()
     {
         $data = array_map([$this, 'insertDataCallback'], array_keys($this->values), $this->values);
-
-        $insertSql = Yii::$app->db->queryBuilder->batchInsert($this->tableName, $this->getInsertFields(), $data);
-        $insertSql = "$insertSql ON DUPLICATE KEY UPDATE {$this->valueField} = VALUES({$this->valueField})";
         $deleteCondition = $this->getDeleteCondition();
+        $db = Yii::$app->db;
+        if ($db->driverName == 'sqlsrv') {
+            $transaction = Yii::$app->db->beginTransaction();
+            try {
+                foreach ($data as $itemKey => $item) {
+                    $isKeyExist = Yii::$app->db->createCommand("SELECT * FROM [app_config] WHERE [key] = '".$item['key']."'")->queryOne();
+                    if ($isKeyExist) {
+                        $updateSql = Yii::$app->db->createCommand()->update($this->tableName, ['key' => $item['key'], 'value' => $item['value']], ['key' => $item['key']]);
+                        $count = $updateSql->execute();
+                    } else {
+                        $insertSql = Yii::$app->db->createCommand()->insert($this->tableName, ['key' => $item['key'], 'value' => $item['value']]);
+                        $count = $insertSql->execute();
+                    }
+                }
+                $count += Yii::$app->db->createCommand()->delete($this->tableName, $deleteCondition)->execute();
+                $this->deleteKeys = [];
+                $transaction->commit();
+            }
+            catch (Exception $e) {
+                $transaction->rollBack();
+                throw $e;
+            }
 
-        $transaction = Yii::$app->db->beginTransaction();
-        try {
-            $count = Yii::$app->db->createCommand($insertSql)->execute();
-            $count += Yii::$app->db->createCommand()->delete($this->tableName, $deleteCondition)->execute();
-            $this->deleteKeys = [];
-            $transaction->commit();
-        } catch (Exception $e) {
-            $transaction->rollBack();
-            throw $e;
+        } else {
+            $insertSql = Yii::$app->db->queryBuilder->batchInsert($this->tableName, $this->getInsertFields(), $data);
+            $insertSql = "$insertSql ON DUPLICATE KEY UPDATE {$this->valueField} = VALUES({$this->valueField})";
+            $deleteCondition = $this->getDeleteCondition();
+
+            $transaction = Yii::$app->db->beginTransaction();
+            try {
+                $count = Yii::$app->db->createCommand($insertSql)->execute();
+                $count += Yii::$app->db->createCommand()->delete($this->tableName, $deleteCondition)->execute();
+                $this->deleteKeys = [];
+                $transaction->commit();
+            } catch (Exception $e) {
+                $transaction->rollBack();
+                throw $e;
+            }
         }
 
         return $count ?? 0;

@@ -160,12 +160,25 @@ class Config extends BaseObject implements \ArrayAccess, \Countable, \Iterator
             $transaction = Yii::$app->db->beginTransaction();
             try {
                 foreach ($data as $itemKey => $item) {
-                    $isKeyExist = Yii::$app->db->createCommand("SELECT * FROM [app_config] WHERE [key] = '".$item['key']."'")->queryOne();
+                    if (isset($item['user_id'])) {
+                        $isKeyExist = Yii::$app->db->createCommand("SELECT * FROM ".$this->tableName." WHERE [key] = '".$item['key']."' AND [user_id] = '".$item['user_id']."'")->queryOne();
+                    } else {
+                        $isKeyExist = Yii::$app->db->createCommand("SELECT * FROM ".$this->tableName." WHERE [key] = '".$item['key']."'")->queryOne();
+                    }
+
                     if ($isKeyExist) {
-                        $updateSql = Yii::$app->db->createCommand()->update($this->tableName, ['key' => $item['key'], 'value' => $item['value']], ['key' => $item['key']]);
+                        if (isset($item['user_id'])) {
+                            $updateSql = Yii::$app->db->createCommand()->update($this->tableName, ['key' => $item['key'], 'value' => $item['value'], 'user_id' => $item['user_id']], ['key' => $item['key'], 'user_id' => $item['user_id']]);
+                        } else {
+                            $updateSql = Yii::$app->db->createCommand()->update($this->tableName, ['key' => $item['key'], 'value' => $item['value']], ['key' => $item['key']]);
+                        }
                         $count = $updateSql->execute();
                     } else {
-                        $insertSql = Yii::$app->db->createCommand()->insert($this->tableName, ['key' => $item['key'], 'value' => $item['value']]);
+                        if (isset($item['user_id'])) {
+                            $insertSql = Yii::$app->db->createCommand()->insert($this->tableName, ['key' => $item['key'], 'value' => $item['value'], 'user_id' => $item['user_id']]);
+                        } else {
+                            $insertSql = Yii::$app->db->createCommand()->insert($this->tableName, ['key' => $item['key'], 'value' => $item['value']]);
+                        }
                         $count = $insertSql->execute();
                     }
                 }

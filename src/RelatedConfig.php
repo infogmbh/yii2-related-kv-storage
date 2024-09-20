@@ -167,7 +167,7 @@ class RelatedConfig extends Config
      * @param string|number $offset key.
      * @return mixed
      */
-    public function offsetGet($offset)
+    public function offsetGet($offset): mixed
     {
         if (!$this->useCommonConfig || !$this->config) return parent::offsetGet($offset);
 
